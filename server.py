@@ -78,6 +78,7 @@ class MatchmakingServer:
 
     def handle_client(self, client_socket, address):
         """Gère la communication avec un client."""
+        pseudo = None  # Pour stocker le pseudo du client
         try:
             while True:
                 data = client_socket.recv(1024).decode()
@@ -102,14 +103,16 @@ class MatchmakingServer:
                             "status": "OK"
                         }).encode())
                 elif action == "JOIN":
-                    pseudo = message["pseudo"]
+                    if not pseudo:
+                        continue
                     player = Player(pseudo, address[0], address[1], datetime.now())
                     with self.lock:
                         self.db.add_player(player)
                         self.queue.put((player, client_socket))
                     self.check_queue()
                 elif action == "LEAVE":
-                    pseudo = message["pseudo"]
+                    if not pseudo:
+                        continue
                     with self.lock:
                         temp_queue = Queue()
                         removed = False
@@ -123,17 +126,54 @@ class MatchmakingServer:
                         self.queue = temp_queue
                     self.check_queue()
                 elif action == "MOVE":
-                    self.handle_move(message["pseudo"], message["match_id"], message["position"])
+                    if not pseudo:
+                        continue
+                    self.handle_move(pseudo, message["match_id"], message["position"])
 
         except Exception as e:
             print(f"Erreur avec client {address}: {e}")
         finally:
-            for pseudo, socket in list(self.clients.items()):
-                if socket == client_socket:
-                    with self.lock:
-                        del self.clients[pseudo]
-                    break
-            client_socket.close()
+            self.handle_disconnect(pseudo, client_socket)
+
+    def handle_disconnect(self, pseudo, client_socket):
+        """Gère la déconnexion d'un client."""
+        with self.lock:
+            # Supprimer le client de la liste des connectés
+            if pseudo and pseudo in self.clients:
+                del self.clients[pseudo]
+
+            # Retirer le client de la file d'attente
+            temp_queue = Queue()
+            while not self.queue.empty():
+                player, socket = self.queue.get()
+                if socket != client_socket:
+                    temp_queue.put((player, socket))
+            self.queue = temp_queue
+
+            # Vérifier si le joueur était dans un match
+            for match_id, (match, game) in list(self.matches.items()):
+                opponent_pseudo = None
+                if match.player1.pseudo == pseudo:
+                    opponent_pseudo = match.player2.pseudo
+                elif match.player2.pseudo == pseudo:
+                    opponent_pseudo = match.player1.pseudo
+
+                if opponent_pseudo and opponent_pseudo in self.clients:
+                    # Marquer le match comme interrompu
+                    match.is_finished = True
+                    match.result = "interrupted"
+                    self.db.update_match(match)  # Fix: Pass match object, not match_id
+                    # Notifier l'opponent
+                    try:
+                        self.clients[opponent_pseudo].send(json.dumps({
+                            "action": "MATCH_INTERRUPTED",
+                            "message": f"Votre adversaire ({pseudo}) s'est déconnecté. Le match est annulé."
+                        }).encode())
+                    except:
+                        pass  # L'opponent peut aussi être déconnecté
+
+                    # Supprimer le match
+                    del self.matches[match_id]
 
     def check_queue(self):
         """Vérifie la file d'attente pour créer des matchs."""

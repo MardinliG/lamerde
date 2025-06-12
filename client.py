@@ -42,11 +42,9 @@ class GameClient:
             messagebox.showerror("Erreur", "Veuillez entrer un pseudo.")
             return
         self.pseudo = pseudo
-        # Envoyer la requête CONNECT au serveur
         message = json.dumps({"action": "CONNECT", "pseudo": pseudo})
         try:
             self.client.send(message.encode())
-            # Attendre une confirmation (optionnel, pour gérer les erreurs comme pseudo déjà pris)
             response = self.client.recv(1024).decode()
             response_data = json.loads(response)
             if response_data.get("status") == "ERROR":
@@ -123,7 +121,10 @@ class GameClient:
                 message = json.loads(data)
                 action = message["action"]
 
-                if action == "START":
+                if action == "CONNECT":
+                    # Réponse déjà gérée dans validate_pseudo
+                    pass
+                elif action == "START":
                     self.opponent = message["opponent"]
                     self.match_id = message["match_id"]
                     self.symbol = message["symbol"]
@@ -145,6 +146,8 @@ class GameClient:
                     self.root.after(0, lambda: self.status_label.config(text="Vous avez quitté la file d'attente."))
                     self.root.after(0, lambda: self.join_button.config(state="normal"))
                     self.root.after(0, lambda: self.leave_button.config(state="disabled"))
+                elif action == "MATCH_INTERRUPTED":
+                    self.root.after(0, self.handle_match_interrupted, message["message"])
 
         except Exception as e:
             print(f"Erreur de connexion: {e}")
@@ -192,6 +195,15 @@ class GameClient:
             message = f"{self.opponent} a gagné !"
         messagebox.showinfo("Fin du match", message)
         self.root.quit()
+
+    def handle_match_interrupted(self, message):
+        """Gère l'interruption du match due à une déconnexion."""
+        messagebox.showinfo("Match annulé", message)
+        self.opponent = None
+        self.match_id = None
+        self.symbol = None
+        self.is_my_turn = False
+        self.setup_waiting_ui()
 
     def run(self):
         """Démarre l'interface graphique."""
