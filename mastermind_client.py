@@ -926,7 +926,7 @@ class MastermindClient:
         # Code secret du joueur
         tk.Label(
             codes_table, 
-            text=f"Votre code:" , 
+            text=f"Votre code:", 
             font=("Helvetica", 12, "bold"), 
             bg=self.bg_color, 
             fg=self.text_color,
@@ -937,10 +937,8 @@ class MastermindClient:
         my_code_frame = tk.Frame(codes_table, bg=self.bg_color)
         my_code_frame.grid(row=0, column=1, padx=5, pady=5)
         
-        # Déterminer quel code est le vôtre
-        my_code = self.my_code
-        
-        for i, color in enumerate(my_code):
+        # Afficher le code du joueur (celui qu'il a créé)
+        for i, color in enumerate(self.my_code):
             color_canvas = tk.Canvas(my_code_frame, width=30, height=30, bg=color, highlightthickness=1, highlightbackground="black")
             color_canvas.grid(row=0, column=i, padx=3)
         
@@ -959,6 +957,8 @@ class MastermindClient:
         opponent_code_frame.grid(row=1, column=1, padx=5, pady=5)
         
         # Déterminer quel code est celui de l'adversaire
+        # Si je suis player1, alors le code de l'adversaire est player2_code
+        # Si je suis player2, alors le code de l'adversaire est player1_code
         opponent_code = player2_code if self.pseudo == player1_code else player1_code
         
         for i, color in enumerate(opponent_code):
