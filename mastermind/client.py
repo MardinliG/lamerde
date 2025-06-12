@@ -9,27 +9,31 @@ import json
 import tkinter as tk
 from tkinter import messagebox, ttk
 
-from ui.login_ui import setup_login_ui
-from ui.main_menu_ui import setup_main_menu_ui
-from ui.rules_ui import setup_rules_ui
-from ui.code_creation_ui import setup_code_creation_ui
-from ui.waiting_ui import setup_waiting_ui
-from ui.game_ui import setup_game_ui, update_game_ui
-from ui.result_ui import setup_game_result_ui
-from config import Config
+from mastermind.ui.main_menu_ui import setup_main_menu_ui
+from mastermind.ui.rules_ui import setup_rules_ui
+from mastermind.ui.code_creation_ui import setup_code_creation_ui
+from mastermind.ui.waiting_ui import setup_waiting_ui
+from mastermind.ui.game_ui import setup_game_ui, update_game_ui
+from mastermind.ui.result_ui import setup_game_result_ui
+from mastermind.config import Config
 
 class MastermindClient:
     """Client pour jouer au Mastermind en 1v1."""
-    def __init__(self, host="localhost", port=12345):
-        self.client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        try:
-            self.client.connect((host, port))
-        except Exception as e:
-            print(f"Erreur de connexion: {e}")
-            messagebox.showerror("Erreur", f"Impossible de se connecter au serveur: {e}")
-            return
+    def __init__(self, pseudo, client_socket=None, parent_root=None, host="localhost", port=12345):
+        # Si un socket client est fourni, l'utiliser, sinon en créer un nouveau
+        if client_socket:
+            self.client = client_socket
+        else:
+            self.client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            try:
+                self.client.connect((host, port))
+            except Exception as e:
+                print(f"Erreur de connexion: {e}")
+                messagebox.showerror("Erreur", f"Impossible de se connecter au serveur: {e}")
+                return
             
-        self.pseudo = None
+        self.pseudo = pseudo
+        self.parent_root = parent_root
         self.match_id = None
         self.opponent = None
         self.my_code = []  # Code secret créé par le joueur
@@ -44,8 +48,13 @@ class MastermindClient:
         self.in_queue = False
         
         # Interface graphique
-        self.root = tk.Tk()
-        self.root.title("Mastermind - Connexion")
+        if parent_root:
+            self.root = tk.Toplevel(parent_root)
+            self.root.protocol("WM_DELETE_WINDOW", self.return_to_main)
+        else:
+            self.root = tk.Tk()
+            
+        self.root.title("Mastermind - Menu Principal")
         self.root.geometry("800x600")
         self.root.resizable(False, False)
         
@@ -65,30 +74,6 @@ class MastermindClient:
         self.style.configure("TFrame", background=self.bg_color)
         
         self.current_frame = None
-        self.setup_login_ui()
-
-    def setup_login_ui(self):
-        """Configure l'interface de connexion."""
-        setup_login_ui(self)
-
-    def validate_pseudo(self):
-        """Valide le pseudo et envoie une requête CONNECT."""
-        pseudo = self.pseudo_entry.get().strip()
-        if not pseudo:
-            messagebox.showerror("Erreur", "Veuillez entrer un pseudo.")
-            return
-        self.pseudo = pseudo
-        message = json.dumps({"action": "CONNECT", "pseudo": pseudo, "game": "mastermind"})
-        try:
-            self.client.send(message.encode())
-            response = self.client.recv(1024).decode()
-            response_data = json.loads(response)
-            if response_data.get("status") == "ERROR":
-                messagebox.showerror("Erreur", response_data.get("message", "Pseudo déjà pris."))
-                return
-        except Exception as e:
-            messagebox.showerror("Erreur", f"Connexion au serveur échouée: {e}")
-            return
         self.setup_main_menu()
 
     def setup_main_menu(self):
@@ -104,6 +89,14 @@ class MastermindClient:
     def quit_game(self):
         """Quitte le jeu."""
         if messagebox.askyesno("Quitter", "Êtes-vous sûr de vouloir quitter?"):
+            self.return_to_main()
+
+    def return_to_main(self):
+        """Retourne au menu principal de l'application."""
+        if self.parent_root:
+            self.root.destroy()
+            self.parent_root.deiconify()  # Réaffiche la fenêtre principale
+        else:
             try:
                 self.client.close()
             except:
@@ -310,15 +303,8 @@ class MastermindClient:
         except Exception as e:
             print(f"Erreur de connexion: {e}")
             self.root.after(0, lambda: messagebox.showerror("Erreur", f"Connexion perdue: {e}"))
-            try:
-                self.client.close()
-            except:
-                pass
+            self.return_to_main()
 
     def run(self):
         """Démarre l'interface graphique."""
         self.root.mainloop()
-        try:
-            self.client.close()
-        except:
-            pass
