@@ -47,6 +47,14 @@ class MatchmakingServer:
         self.history_tree.heading("Result", text="Résultat")
         self.history_tree.pack(fill="both", expand=True)
 
+        tk.Label(self.root, text="Historique des connexions:").pack(pady=5)
+        self.connection_tree = ttk.Treeview(self.root, columns=("Pseudo", "IP", "Port", "JoinDate"), show="headings")
+        self.connection_tree.heading("Pseudo", text="Pseudo")
+        self.connection_tree.heading("IP", text="IP")
+        self.connection_tree.heading("Port", text="Port")
+        self.connection_tree.heading("JoinDate", text="Date de connexion")
+        self.connection_tree.pack(fill="both", expand=True)
+
         tk.Button(self.root, text="Rafraîchir l'historique", command=self.update_history).pack(pady=5)
         self.update_monitoring_ui()
 
@@ -69,16 +77,22 @@ class MatchmakingServer:
         self.root.after(1000, self.update_monitoring_ui)
 
     def update_history(self):
-        """Met à jour l'historique des matchs terminés."""
+        """Met à jour l'historique des matchs et connexions terminés."""
         for item in self.history_tree.get_children():
             self.history_tree.delete(item)
         self.db.cursor.execute("SELECT id, player1, player2, result FROM matches WHERE is_finished = 1")
         for row in self.db.cursor.fetchall():
             self.history_tree.insert("", "end", values=row)
 
+        for item in self.connection_tree.get_children():
+            self.connection_tree.delete(item)
+        self.db.cursor.execute("SELECT pseudo, ip, port, join_date FROM players")
+        for row in self.db.cursor.fetchall():
+            self.connection_tree.insert("", "end", values=row)
+
     def handle_client(self, client_socket, address):
         """Gère la communication avec un client."""
-        pseudo = None  # Pour stocker le pseudo du client
+        pseudo = None
         try:
             while True:
                 data = client_socket.recv(1024).decode()
@@ -97,7 +111,9 @@ class MatchmakingServer:
                                 "message": "Pseudo déjà pris."
                             }).encode())
                             continue
+                        player = Player(pseudo, address[0], address[1], datetime.now())
                         self.clients[pseudo] = client_socket
+                        self.db.add_player(player)
                         client_socket.send(json.dumps({
                             "action": "CONNECT",
                             "status": "OK"
@@ -107,7 +123,7 @@ class MatchmakingServer:
                         continue
                     player = Player(pseudo, address[0], address[1], datetime.now())
                     with self.lock:
-                        self.db.add_player(player)
+                        self.db.update_player(player)
                         self.queue.put((player, client_socket))
                     self.check_queue()
                 elif action == "LEAVE":
@@ -138,11 +154,9 @@ class MatchmakingServer:
     def handle_disconnect(self, pseudo, client_socket):
         """Gère la déconnexion d'un client."""
         with self.lock:
-            # Supprimer le client de la liste des connectés
             if pseudo and pseudo in self.clients:
                 del self.clients[pseudo]
 
-            # Retirer le client de la file d'attente
             temp_queue = Queue()
             while not self.queue.empty():
                 player, socket = self.queue.get()
@@ -150,7 +164,6 @@ class MatchmakingServer:
                     temp_queue.put((player, socket))
             self.queue = temp_queue
 
-            # Vérifier si le joueur était dans un match
             for match_id, (match, game) in list(self.matches.items()):
                 opponent_pseudo = None
                 if match.player1.pseudo == pseudo:
@@ -159,20 +172,16 @@ class MatchmakingServer:
                     opponent_pseudo = match.player1.pseudo
 
                 if opponent_pseudo and opponent_pseudo in self.clients:
-                    # Marquer le match comme interrompu
                     match.is_finished = True
                     match.result = "interrupted"
-                    self.db.update_match(match)  # Fix: Pass match object, not match_id
-                    # Notifier l'opponent
+                    self.db.update_match(match)
                     try:
                         self.clients[opponent_pseudo].send(json.dumps({
                             "action": "MATCH_INTERRUPTED",
                             "message": f"Votre adversaire ({pseudo}) s'est déconnecté. Le match est annulé."
                         }).encode())
                     except:
-                        pass  # L'opponent peut aussi être déconnecté
-
-                    # Supprimer le match
+                        pass
                     del self.matches[match_id]
 
     def check_queue(self):
@@ -205,13 +214,15 @@ class MatchmakingServer:
         """Gère un coup joué par un joueur."""
         with self.lock:
             if match_id not in self.matches:
+                print(f"Match {match_id} not found for {pseudo}")
                 return
             match, game = self.matches[match_id]
             player = match.player1 if pseudo == match.player1.pseudo else match.player2
             opponent = match.player2 if pseudo == match.player1.pseudo else match.player1
             symbol = "X" if pseudo == match.player1.pseudo else "O"
 
-            if game.play_move(position, symbol):
+            print(f"Processing move: {pseudo} plays {symbol} at position {position}")
+            if game.play_move(position, symbol):  # Fixed: Use symbol instead of pseudo
                 turn = Turn(match_id, player, position)
                 self.db.add_turn(turn)
                 match.board = game.board
@@ -220,9 +231,13 @@ class MatchmakingServer:
                 move_message = json.dumps({
                     "action": "MOVE",
                     "position": position,
-                    "symbol": symbol
+                    "symbol": symbol  # Fixed: Use defined symbol
                 })
-                self.clients[opponent.pseudo].send(move_message.encode())
+                try:
+                    self.clients[opponent.pseudo].send(move_message.encode())
+                    print(f"Sent move to {opponent.pseudo}: {move_message}")
+                except Exception as e:
+                    print(f"Failed to send move to {opponent.pseudo}: {e}")
 
                 result = game.check_winner()
                 if result:
@@ -239,9 +254,15 @@ class MatchmakingServer:
                         "action": "END",
                         "result": match.result
                     })
-                    self.clients[match.player1.pseudo].send(end_message.encode())
-                    self.clients[match.player2.pseudo].send(end_message.encode())
+                    try:
+                        self.clients[match.player1.pseudo].send(end_message.encode())
+                        self.clients[match.player2.pseudo].send(end_message.encode())
+                        print(f"Sent end message to {match.player1.pseudo} and {match.player2.pseudo}")
+                    except Exception as e:
+                        print(f"Failed to send end message: {e}")
                     del self.matches[match_id]
+            else:
+                print(f"Invalid move by {pseudo} at position {position}")
 
     def run(self):
         """Démarre le serveur et l'interface graphique."""
