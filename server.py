@@ -5,19 +5,86 @@ from queue import Queue
 from models import Player, Match, Turn, TicTacToe
 from database import Database
 from datetime import datetime
+import tkinter as tk
+from tkinter import ttk
 
 class MatchmakingServer:
-    """Serveur de matchmaking pour le jeu Morpion."""
+    """Serveur de matchmaking pour le jeu Morpion avec interface de monitoring."""
     def __init__(self, host="localhost", port=12345):
         self.server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.server.bind((host, port))
         self.server.listen(5)
         self.queue = Queue()  # File d'attente des joueurs
-        self.matches = {}     # Dictionnaire match_id -> Match
+        self.matches = {}     # Dictionnaire match_id -> (Match, TicTacToe)
         self.clients = {}     # Dictionnaire pseudo -> socket
         self.db = Database()
         self.lock = threading.Lock()
         print(f"Serveur démarré sur {host}:{port}")
+
+        # Interface graphique
+        self.root = tk.Tk()
+        self.root.title("Monitoring du Serveur Morpion")
+        self.setup_monitoring_ui()
+
+    def setup_monitoring_ui(self):
+        """Configure l'interface de monitoring."""
+        # Nombre de joueurs connectés
+        self.connected_label = tk.Label(self.root, text="Joueurs connectés: 0")
+        self.connected_label.pack(pady=5)
+
+        # Nombre de joueurs en file d'attente
+        self.queue_label = tk.Label(self.root, text="Joueurs en file: 0")
+        self.queue_label.pack(pady=5)
+
+        # Matchs en cours
+        tk.Label(self.root, text="Matchs en cours:").pack(pady=5)
+        self.matches_frame = tk.Frame(self.root)
+        self.matches_frame.pack(fill="both", expand=True)
+        self.matches_labels = {}  # Stocke les labels des matchs pour mise à jour
+
+        # Historique des matchs terminés
+        tk.Label(self.root, text="Historique des matchs terminés:").pack(pady=5)
+        self.history_tree = ttk.Treeview(self.root, columns=("ID", "Player1", "Player2", "Result"), show="headings")
+        self.history_tree.heading("ID", text="ID Match")
+        self.history_tree.heading("Player1", text="Joueur 1")
+        self.history_tree.heading("Player2", text="Joueur 2")
+        self.history_tree.heading("Result", text="Résultat")
+        self.history_tree.pack(fill="both", expand=True)
+
+        # Bouton pour actualiser l'historique
+        tk.Button(self.root, text="Rafraîchir l'historique", command=self.update_history).pack(pady=5)
+
+        # Lancer la mise à jour périodique
+        self.update_monitoring_ui()
+
+    def update_monitoring_ui(self):
+        """Met à jour l'interface de monitoring."""
+        # Mise à jour des joueurs connectés
+        with self.lock:
+            self.connected_label.config(text=f"Joueurs connectés: {len(self.clients)}")
+            self.queue_label.config(text=f"Joueurs en file: {self.queue.qsize()}")
+
+            # Mise à jour des matchs en cours
+            for widget in self.matches_frame.winfo_children():
+                widget.destroy()
+            self.matches_labels.clear()
+            for match_id, (match, game) in self.matches.items():
+                board_str = "\n".join([f"{game.board[0:3]}", f"{game.board[3:6]}", f"{game.board[6:9]}"])
+                label_text = f"Match {match_id}: {match.player1.pseudo} vs {match.player2.pseudo}\nPlateau:\n{board_str}\nStatut: {'Terminé' if match.is_finished else 'En cours'}"
+                label = tk.Label(self.matches_frame, text=label_text, justify="left", font=("Courier", 10))
+                label.pack(anchor="w", pady=2)
+                self.matches_labels[match_id] = label
+
+        # Planifier la prochaine mise à jour
+        self.root.after(1000, self.update_monitoring_ui)
+
+    def update_history(self):
+        """Met à jour l'historique des matchs terminés."""
+        for item in self.history_tree.get_children():
+            self.history_tree.delete(item)
+        self.db.cursor.execute("SELECT id, player1, player2, result FROM matches WHERE is_finished = 1")
+        for row in self.db.cursor.fetchall():
+            self.history_tree.insert("", "end", values=row)
 
     def handle_client(self, client_socket, address):
         """Gère la communication avec un client."""
@@ -43,6 +110,12 @@ class MatchmakingServer:
         except Exception as e:
             print(f"Erreur avec client {address}: {e}")
         finally:
+            # Supprimer le client de la liste s'il se déconnecte
+            for pseudo, socket in list(self.clients.items()):
+                if socket == client_socket:
+                    with self.lock:
+                        del self.clients[pseudo]
+                    break
             client_socket.close()
 
     def check_queue(self):
@@ -118,15 +191,24 @@ class MatchmakingServer:
                     del self.matches[match_id]
 
     def run(self):
-        """Démarre le serveur."""
+        """Démarre le serveur et l'interface graphique."""
+        # Lancer le thread du serveur
+        threading.Thread(target=self.run_server, daemon=True).start()
+        # Lancer l'interface graphique
+        self.root.mainloop()
+        # Fermer proprement à la fermeture de l'interface
+        self.db.close()
+        self.server.close()
+
+    def run_server(self):
+        """Boucle principale du serveur."""
         try:
             while True:
                 client, address = self.server.accept()
                 print(f"Nouveau client connecté: {address}")
                 threading.Thread(target=self.handle_client, args=(client, address)).start()
-        finally:
-            self.db.close()
-            self.server.close()
+        except Exception as e:
+            print(f"Erreur serveur: {e}")
 
 if __name__ == "__main__":
     server = MatchmakingServer()
