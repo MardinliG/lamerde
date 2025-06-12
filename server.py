@@ -86,18 +86,31 @@ class MatchmakingServer:
                 message = json.loads(data)
                 action = message.get("action")
 
-                if action == "JOIN":
+                if action == "CONNECT":
+                    pseudo = message["pseudo"]
+                    with self.lock:
+                        if pseudo in self.clients:
+                            client_socket.send(json.dumps({
+                                "action": "CONNECT",
+                                "status": "ERROR",
+                                "message": "Pseudo déjà pris."
+                            }).encode())
+                            continue
+                        self.clients[pseudo] = client_socket
+                        client_socket.send(json.dumps({
+                            "action": "CONNECT",
+                            "status": "OK"
+                        }).encode())
+                elif action == "JOIN":
                     pseudo = message["pseudo"]
                     player = Player(pseudo, address[0], address[1], datetime.now())
                     with self.lock:
                         self.db.add_player(player)
                         self.queue.put((player, client_socket))
-                        self.clients[pseudo] = client_socket
                     self.check_queue()
                 elif action == "LEAVE":
                     pseudo = message["pseudo"]
                     with self.lock:
-                        # Retirer le joueur de la file
                         temp_queue = Queue()
                         removed = False
                         while not self.queue.empty():

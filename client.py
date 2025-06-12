@@ -36,12 +36,25 @@ class GameClient:
         tk.Button(self.current_frame, text="Valider", command=self.validate_pseudo).pack()
 
     def validate_pseudo(self):
-        """Valide le pseudo et passe à l'écran d'attente."""
+        """Valide le pseudo et envoie une requête CONNECT."""
         pseudo = self.pseudo_entry.get().strip()
         if not pseudo:
             messagebox.showerror("Erreur", "Veuillez entrer un pseudo.")
             return
         self.pseudo = pseudo
+        # Envoyer la requête CONNECT au serveur
+        message = json.dumps({"action": "CONNECT", "pseudo": pseudo})
+        try:
+            self.client.send(message.encode())
+            # Attendre une confirmation (optionnel, pour gérer les erreurs comme pseudo déjà pris)
+            response = self.client.recv(1024).decode()
+            response_data = json.loads(response)
+            if response_data.get("status") == "ERROR":
+                messagebox.showerror("Erreur", response_data.get("message", "Pseudo déjà pris."))
+                return
+        except Exception as e:
+            messagebox.showerror("Erreur", f"Connexion au serveur échouée: {e}")
+            return
         self.setup_waiting_ui()
 
     def setup_waiting_ui(self):
@@ -115,7 +128,7 @@ class GameClient:
                     self.match_id = message["match_id"]
                     self.symbol = message["symbol"]
                     self.is_my_turn = self.symbol == "X"
-                    self.in_queue = False  # Sortir de la file
+                    self.in_queue = False
                     self.root.after(0, self.setup_game_ui)
                     self.root.after(100, self.update_status)
                 elif action == "MOVE":
@@ -165,7 +178,7 @@ class GameClient:
             elif self.in_queue:
                 self.status_label.config(text="Vous êtes dans la file d'attente...")
             else:
-                self.status_label.config(text=f"Tour de {self.opponent}...")
+                self.status_label.config(text=f"Tour de {self.opponent}..." if self.opponent else "Vous n'êtes pas dans la file d'attente.")
         else:
             print("status_label n'est pas encore défini, mise à jour différée.")
 
