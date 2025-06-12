@@ -28,21 +28,17 @@ class MatchmakingServer:
 
     def setup_monitoring_ui(self):
         """Configure l'interface de monitoring."""
-        # Nombre de joueurs connectés
         self.connected_label = tk.Label(self.root, text="Joueurs connectés: 0")
         self.connected_label.pack(pady=5)
 
-        # Nombre de joueurs en file d'attente
         self.queue_label = tk.Label(self.root, text="Joueurs en file: 0")
         self.queue_label.pack(pady=5)
 
-        # Matchs en cours
         tk.Label(self.root, text="Matchs en cours:").pack(pady=5)
         self.matches_frame = tk.Frame(self.root)
         self.matches_frame.pack(fill="both", expand=True)
-        self.matches_labels = {}  # Stocke les labels des matchs pour mise à jour
+        self.matches_labels = {}
 
-        # Historique des matchs terminés
         tk.Label(self.root, text="Historique des matchs terminés:").pack(pady=5)
         self.history_tree = ttk.Treeview(self.root, columns=("ID", "Player1", "Player2", "Result"), show="headings")
         self.history_tree.heading("ID", text="ID Match")
@@ -51,20 +47,15 @@ class MatchmakingServer:
         self.history_tree.heading("Result", text="Résultat")
         self.history_tree.pack(fill="both", expand=True)
 
-        # Bouton pour actualiser l'historique
         tk.Button(self.root, text="Rafraîchir l'historique", command=self.update_history).pack(pady=5)
-
-        # Lancer la mise à jour périodique
         self.update_monitoring_ui()
 
     def update_monitoring_ui(self):
         """Met à jour l'interface de monitoring."""
-        # Mise à jour des joueurs connectés
         with self.lock:
             self.connected_label.config(text=f"Joueurs connectés: {len(self.clients)}")
             self.queue_label.config(text=f"Joueurs en file: {self.queue.qsize()}")
 
-            # Mise à jour des matchs en cours
             for widget in self.matches_frame.winfo_children():
                 widget.destroy()
             self.matches_labels.clear()
@@ -75,7 +66,6 @@ class MatchmakingServer:
                 label.pack(anchor="w", pady=2)
                 self.matches_labels[match_id] = label
 
-        # Planifier la prochaine mise à jour
         self.root.after(1000, self.update_monitoring_ui)
 
     def update_history(self):
@@ -104,13 +94,27 @@ class MatchmakingServer:
                         self.queue.put((player, client_socket))
                         self.clients[pseudo] = client_socket
                     self.check_queue()
+                elif action == "LEAVE":
+                    pseudo = message["pseudo"]
+                    with self.lock:
+                        # Retirer le joueur de la file
+                        temp_queue = Queue()
+                        removed = False
+                        while not self.queue.empty():
+                            player, socket = self.queue.get()
+                            if player.pseudo != pseudo:
+                                temp_queue.put((player, socket))
+                            else:
+                                removed = True
+                                socket.send(json.dumps({"action": "LEFT_QUEUE"}).encode())
+                        self.queue = temp_queue
+                    self.check_queue()
                 elif action == "MOVE":
                     self.handle_move(message["pseudo"], message["match_id"], message["position"])
 
         except Exception as e:
             print(f"Erreur avec client {address}: {e}")
         finally:
-            # Supprimer le client de la liste s'il se déconnecte
             for pseudo, socket in list(self.clients.items()):
                 if socket == client_socket:
                     with self.lock:
@@ -129,7 +133,6 @@ class MatchmakingServer:
                 match.id = self.db.add_match(match)
                 self.matches[match.id] = (match, game)
 
-                # Notifier les joueurs du début du match
                 start_message = json.dumps({
                     "action": "START",
                     "opponent": player2.pseudo,
@@ -161,7 +164,6 @@ class MatchmakingServer:
                 match.board = game.board
                 self.db.update_match(match)
 
-                # Envoyer le coup à l'adversaire
                 move_message = json.dumps({
                     "action": "MOVE",
                     "position": position,
@@ -169,7 +171,6 @@ class MatchmakingServer:
                 })
                 self.clients[opponent.pseudo].send(move_message.encode())
 
-                # Vérifier si le match est terminé
                 result = game.check_winner()
                 if result:
                     match.is_finished = True
@@ -181,7 +182,6 @@ class MatchmakingServer:
                         match.result = "draw"
                     self.db.update_match(match)
 
-                    # Notifier les joueurs de la fin
                     end_message = json.dumps({
                         "action": "END",
                         "result": match.result
@@ -192,11 +192,8 @@ class MatchmakingServer:
 
     def run(self):
         """Démarre le serveur et l'interface graphique."""
-        # Lancer le thread du serveur
         threading.Thread(target=self.run_server, daemon=True).start()
-        # Lancer l'interface graphique
         self.root.mainloop()
-        # Fermer proprement à la fermeture de l'interface
         self.db.close()
         self.server.close()
 

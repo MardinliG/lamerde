@@ -15,29 +15,57 @@ class GameClient:
         self.opponent = None
         self.current_turn = "X"  # X commence toujours
         self.is_my_turn = False
+        self.in_queue = False  # Indique si le joueur est dans la file
 
         # Interface graphique
         self.root = tk.Tk()
         self.root.title("Morpion - Connexion")
-        self.current_frame = None  # Suivre le frame actif
+        self.current_frame = None
         self.setup_login_ui()
 
     def setup_login_ui(self):
         """Configure l'interface de connexion."""
         if self.current_frame:
-            self.current_frame.destroy()  # Détruire l'ancien frame
+            self.current_frame.destroy()
         self.current_frame = tk.Frame(self.root)
         self.current_frame.pack()
 
         tk.Label(self.current_frame, text="Pseudo:").pack()
-        pseudo_entry = tk.Entry(self.current_frame)
-        pseudo_entry.pack()
-        tk.Button(self.current_frame, text="Rejoindre", command=lambda: self.join_queue(pseudo_entry.get())).pack()
+        self.pseudo_entry = tk.Entry(self.current_frame)
+        self.pseudo_entry.pack()
+        tk.Button(self.current_frame, text="Valider", command=self.validate_pseudo).pack()
+
+    def validate_pseudo(self):
+        """Valide le pseudo et passe à l'écran d'attente."""
+        pseudo = self.pseudo_entry.get().strip()
+        if not pseudo:
+            messagebox.showerror("Erreur", "Veuillez entrer un pseudo.")
+            return
+        self.pseudo = pseudo
+        self.setup_waiting_ui()
+
+    def setup_waiting_ui(self):
+        """Configure l'écran pour rejoindre ou quitter la file."""
+        if self.current_frame:
+            self.current_frame.destroy()
+        self.current_frame = tk.Frame(self.root)
+        self.current_frame.pack()
+        self.root.title(f"Morpion - {self.pseudo}")
+
+        self.status_label = tk.Label(self.current_frame, text="Vous n'êtes pas dans la file d'attente.")
+        self.status_label.pack(pady=5)
+        self.join_button = tk.Button(self.current_frame, text="Rejoindre la file d'attente", command=self.join_queue)
+        self.join_button.pack(pady=5)
+        self.leave_button = tk.Button(self.current_frame, text="Quitter la file d'attente", command=self.leave_queue, state="disabled")
+        self.leave_button.pack(pady=5)
+
+        # Lancer l'écoute du serveur
+        threading.Thread(target=self.listen_server, daemon=True).start()
 
     def setup_game_ui(self):
         """Configure l'interface du jeu."""
         if self.current_frame:
-            self.current_frame.destroy()  # Détruire l'ancien frame
+            self.current_frame.destroy()
         self.current_frame = tk.Frame(self.root)
         self.current_frame.pack()
 
@@ -50,20 +78,27 @@ class GameClient:
         self.status_label = tk.Label(self.current_frame, text="En attente de votre tour...")
         self.status_label.grid(row=3, column=0, columnspan=3)
 
-    def join_queue(self, pseudo):
+    def join_queue(self):
         """Envoie une requête pour rejoindre la file d'attente."""
-        if not pseudo:
-            messagebox.showerror("Erreur", "Veuillez entrer un pseudo.")
+        if self.in_queue:
             return
-        self.pseudo = pseudo
-        message = json.dumps({"action": "JOIN", "pseudo": pseudo})
+        message = json.dumps({"action": "JOIN", "pseudo": self.pseudo})
         self.client.send(message.encode())
-        if self.current_frame:
-            self.current_frame.destroy()
-        self.current_frame = tk.Frame(self.root)
-        self.current_frame.pack()
-        tk.Label(self.current_frame, text="En attente d'un adversaire...").pack()
-        threading.Thread(target=self.listen_server, daemon=True).start()
+        self.in_queue = True
+        self.status_label.config(text="Vous êtes dans la file d'attente...")
+        self.join_button.config(state="disabled")
+        self.leave_button.config(state="normal")
+
+    def leave_queue(self):
+        """Envoie une requête pour quitter la file d'attente."""
+        if not self.in_queue:
+            return
+        message = json.dumps({"action": "LEAVE", "pseudo": self.pseudo})
+        self.client.send(message.encode())
+        self.in_queue = False
+        self.status_label.config(text="Vous avez quitté la file d'attente.")
+        self.join_button.config(state="normal")
+        self.leave_button.config(state="disabled")
 
     def listen_server(self):
         """Écoute les messages du serveur."""
@@ -80,8 +115,9 @@ class GameClient:
                     self.match_id = message["match_id"]
                     self.symbol = message["symbol"]
                     self.is_my_turn = self.symbol == "X"
-                    self.root.after(0, self.setup_game_ui)  # Appeler setup_game_ui
-                    self.root.after(100, self.update_status)  # Appeler update_status après un léger délai
+                    self.in_queue = False  # Sortir de la file
+                    self.root.after(0, self.setup_game_ui)
+                    self.root.after(100, self.update_status)
                 elif action == "MOVE":
                     position = message["position"]
                     symbol = message["symbol"]
@@ -91,6 +127,11 @@ class GameClient:
                 elif action == "END":
                     result = message["result"]
                     self.root.after(0, self.end_game, result)
+                elif action == "LEFT_QUEUE":
+                    self.in_queue = False
+                    self.root.after(0, lambda: self.status_label.config(text="Vous avez quitté la file d'attente."))
+                    self.root.after(0, lambda: self.join_button.config(state="normal"))
+                    self.root.after(0, lambda: self.leave_button.config(state="disabled"))
 
         except Exception as e:
             print(f"Erreur de connexion: {e}")
@@ -118,9 +159,11 @@ class GameClient:
 
     def update_status(self):
         """Met à jour le message de statut."""
-        if hasattr(self, 'status_label'):  # Vérifier si status_label existe
+        if hasattr(self, 'status_label'):
             if self.is_my_turn:
                 self.status_label.config(text="À votre tour !")
+            elif self.in_queue:
+                self.status_label.config(text="Vous êtes dans la file d'attente...")
             else:
                 self.status_label.config(text=f"Tour de {self.opponent}...")
         else:
