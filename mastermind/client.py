@@ -16,6 +16,7 @@ from mastermind.ui.waiting_ui import setup_waiting_ui
 from mastermind.ui.game_ui import setup_game_ui, update_game_ui
 from mastermind.ui.result_ui import setup_game_result_ui
 from mastermind.config import Config
+from mastermind.ui.ranking_ui import setup_ranking_ui
 
 class MastermindClient:
     """Client pour jouer au Mastermind en 1v1."""
@@ -299,11 +300,139 @@ class MastermindClient:
                 elif action == "MATCH_INTERRUPTED":
                     messagebox.showinfo("Match annulé", message["message"])
                     self.root.after(0, self.setup_main_menu)
+                
+                elif action == "PLAYER_RANKING" or action == "PLAYER_RANK" or action == "TOP_PLAYERS" or action == "PLAYER_HISTORY":
+                    # Ces messages sont traités directement dans les méthodes correspondantes
+                    pass
+
+                elif action == "RATING_UPDATE":
+                    # Notification de mise à jour du classement après un match
+                    old_rating = message.get("old_rating", 0)
+                    new_rating = message.get("new_rating", 0)
+                    change = new_rating - old_rating
+                    
+                    # Afficher une notification à l'utilisateur
+                    if change != 0:
+                        sign = "+" if change > 0 else ""
+                        notification = f"Votre classement ELO a été mis à jour : {old_rating} → {new_rating} ({sign}{change})"
+                        messagebox.showinfo("Mise à jour du classement", notification)
                     
         except Exception as e:
             print(f"Erreur de connexion: {e}")
             self.root.after(0, lambda: messagebox.showerror("Erreur", f"Connexion perdue: {e}"))
             self.return_to_main()
+
+    def setup_ranking_ui(self):
+        """Configure l'interface du classement."""
+        setup_ranking_ui(self)
+
+    def get_player_ranking(self):
+        """
+        Récupère les informations de classement du joueur.
+        
+        Returns:
+            dict: Les informations de classement du joueur
+        """
+        # Envoyer une requête au serveur pour obtenir les informations de classement
+        message = json.dumps({
+            "action": "GET_PLAYER_RANKING",
+            "pseudo": self.pseudo
+        })
+        self.client.send(message.encode())
+        
+        # Attendre la réponse (ceci est une simplification, normalement on utiliserait un callback)
+        try:
+            data = self.client.recv(1024).decode()
+            response = json.loads(data)
+            if response.get("action") == "PLAYER_RANKING":
+                return response.get("ranking_data")
+        except:
+            pass
+        
+        # En cas d'erreur, retourner des valeurs par défaut
+        return {
+            'pseudo': self.pseudo,
+            'elo_rating': 1200,
+            'games_played': 0,
+            'wins': 0,
+            'losses': 0,
+            'draws': 0,
+            'last_game_date': None
+        }
+
+    def get_player_rank(self):
+        """
+        Récupère le rang du joueur.
+        
+        Returns:
+            int: Le rang du joueur ou None si non classé
+        """
+        # Envoyer une requête au serveur pour obtenir le rang du joueur
+        message = json.dumps({
+            "action": "GET_PLAYER_RANK",
+            "pseudo": self.pseudo
+        })
+        self.client.send(message.encode())
+        
+        # Attendre la réponse
+        try:
+            data = self.client.recv(1024).decode()
+            response = json.loads(data)
+            if response.get("action") == "PLAYER_RANK":
+                return response.get("rank")
+        except:
+            pass
+        
+        return None
+
+    def get_top_players(self):
+        """
+        Récupère les meilleurs joueurs.
+        
+        Returns:
+            list: Liste des meilleurs joueurs
+        """
+        # Envoyer une requête au serveur pour obtenir les meilleurs joueurs
+        message = json.dumps({
+            "action": "GET_TOP_PLAYERS"
+        })
+        self.client.send(message.encode())
+        
+        # Attendre la réponse
+        try:
+            data = self.client.recv(1024).decode()
+            response = json.loads(data)
+            if response.get("action") == "TOP_PLAYERS":
+                return response.get("players", [])
+        except:
+            pass
+        
+        return []
+
+    def get_player_history(self):
+        """
+        Récupère l'historique des parties du joueur.
+        
+        Returns:
+            list: Liste des parties récentes du joueur
+        """
+        # Envoyer une requête au serveur pour obtenir l'historique du joueur
+        message = json.dumps({
+            "action": "GET_PLAYER_HISTORY",
+            "pseudo": self.pseudo
+        })
+        self.client.send(message.encode())
+        
+        # Attendre la réponse
+        try:
+            data = self.client.recv(1024).decode()
+            response = json.loads(data)
+            if response.get("action") == "PLAYER_HISTORY":
+                return response.get("history", [])
+        except:
+            pass
+        
+        return []
 
     def run(self):
         """Démarre l'interface graphique."""

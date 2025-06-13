@@ -58,6 +58,22 @@ def setup_main_menu_ui(client):
         activebackground=client.button_hover
     )
     rules_button.pack(pady=10)
+
+    # Bouton pour le classement
+    ranking_button = tk.Button(
+        menu_frame, 
+        text="Classement", 
+        font=("Helvetica", 14, "bold"), 
+        bg=client.button_color, 
+        fg="white", 
+        width=20, 
+        height=2, 
+        bd=0, 
+        relief=tk.FLAT, 
+        command=client.setup_ranking_ui,
+        activebackground=client.button_hover
+    )
+    ranking_button.pack(pady=10)
     
     # Bouton pour quitter
     quit_button = tk.Button(
