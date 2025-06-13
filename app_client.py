@@ -77,13 +77,13 @@ class AppClient:
 
     def launch_mastermind(self):
         """Lance le jeu Mastermind."""
-        self.root.withdraw()  # Cache la fenêtre principale
+        self.root.withdraw()  
         mastermind_client = MastermindClient(self.pseudo, self.client, self.root)
         mastermind_client.run()
 
     def launch_morpion(self):
         """Lance le jeu Morpion."""
-        self.root.withdraw()  # Cache la fenêtre principale
+        self.root.withdraw() 
         morpion_client = MorpionClient(self.pseudo, self.client, self.root)
         morpion_client.run()
 

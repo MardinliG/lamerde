@@ -134,10 +134,8 @@ class MatchmakingServer:
             columns = [column[1] for column in self.db.cursor.fetchall()]
             
             if 'game_type' in columns:
-                # Nouvelle version avec game_type
                 self.db.cursor.execute("SELECT id, game_type, player1, player2, result FROM matches WHERE is_finished = 1")
             else:
-                # Ancienne version sans game_type
                 self.db.cursor.execute("SELECT id, 'morpion' as game_type, player1, player2, result FROM matches WHERE is_finished = 1")
             
             for row in self.db.cursor.fetchall():
@@ -154,7 +152,7 @@ class MatchmakingServer:
     def handle_client(self, client_socket, address):
         """Gère la communication avec un client."""
         pseudo = None
-        game_type = "morpion"  # Par défaut
+        game_type = "morpion"
         try:
             while True:
                 data = client_socket.recv(1024).decode()
@@ -165,7 +163,7 @@ class MatchmakingServer:
 
                 if action == "CONNECT":
                     pseudo = message["pseudo"]
-                    game_type = message.get("game", "morpion")  # Type de jeu (morpion ou mastermind)
+                    game_type = message.get("game", "morpion") 
                     with self.lock:
                         if pseudo in self.clients:
                             client_socket.send(json.dumps({

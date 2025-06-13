@@ -13,32 +13,32 @@ class Player:
 @dataclass
 class Match:
     """Représente un match entre deux joueurs."""
-    id: int  # Identifiant unique du match
+    id: int 
     player1: Player
     player2: Player
-    board: list  # Plateau de jeu (9 cases pour morpion)
+    board: list  
     is_finished: bool
-    result: str  # "player1", "player2", "draw", ou None
-    game_type: str = "morpion"  # Type de jeu: "morpion" ou "mastermind"
+    result: str 
+    game_type: str = "morpion"  
 
 @dataclass
 class Turn:
     """Représente un tour joué dans un match."""
     match_id: int
     player: Player
-    move: int  # Position du coup (0-8) pour morpion ou liste de couleurs pour mastermind
-    feedback: list = None  # Feedback pour mastermind (pions noirs et blancs)
+    move: int  
+    feedback: list = None  
 
 @dataclass
 class MastermindMatch(Match):
     """Représente un match de Mastermind entre deux joueurs."""
-    player1_code: list = None  # Code secret du joueur 1
-    player2_code: list = None  # Code secret du joueur 2
-    player1_guesses: list = None  # Liste des tentatives du joueur 1
-    player2_guesses: list = None  # Liste des tentatives du joueur 2
-    player1_feedback: list = None  # Liste des feedbacks pour le joueur 1
-    player2_feedback: list = None  # Liste des feedbacks pour le joueur 2
-    max_attempts: int = 10  # Nombre maximum de tentatives
+    player1_code: list = None  
+    player2_code: list = None  
+    player1_guesses: list = None  
+    player2_guesses: list = None  
+    player1_feedback: list = None  
+    player2_feedback: list = None  
+    max_attempts: int = 10  
 
     def __post_init__(self):
         if self.player1_guesses is None:
@@ -54,7 +54,7 @@ class MastermindMatch(Match):
 class TicTacToe:
     """Logique du jeu Morpion."""
     def __init__(self):
-        self.board = [" " for _ in range(9)]  # Plateau 3x3
+        self.board = [" " for _ in range(9)] 
 
     def play_move(self, position: int, player: str) -> bool:
         """Joue un coup à la position donnée si valide."""
@@ -120,7 +120,7 @@ class Mastermind:
                 for j in range(len(code_copy)):
                     if code_copy[j] is not None and guess_copy[i] == code_copy[j]:
                         white_pins += 1
-                        code_copy[j] = None  # Marquer comme traité
+                        code_copy[j] = None  
                         break
         
         return (black_pins, white_pins)

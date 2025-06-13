@@ -62,7 +62,6 @@ class Database:
             ''', (player.pseudo, player.ip, player.port, player.join_date.isoformat()))
             self.conn.commit()
         except sqlite3.IntegrityError:
-            # If pseudo already exists, update the record
             self.update_player(player)
 
     def update_player(self, player: Player):
@@ -132,7 +131,6 @@ class Database:
         self.conn.commit()
 
     def add_turn(self, turn: Turn):
-        # Convertir le move en JSON si c'est une liste (pour Mastermind)
         move_data = json.dumps(turn.move) if isinstance(turn.move, list) else str(turn.move)
         feedback_data = json.dumps(turn.feedback) if turn.feedback else None
         
@@ -153,12 +151,10 @@ class Database:
         if not match_data:
             return None
             
-        # Récupérer les données des joueurs
         player1 = self.get_player(match_data[1])
         player2 = self.get_player(match_data[2])
         
         if match_data[6] == "mastermind":
-            # C'est un match de Mastermind
             self.cursor.execute('''
                 SELECT player1_code, player2_code, player1_guesses, player2_guesses,
                        player1_feedback, player2_feedback, max_attempts
@@ -171,7 +167,7 @@ class Database:
                     id=match_data[0],
                     player1=player1,
                     player2=player2,
-                    board=[],  # Pas utilisé pour Mastermind
+                    board=[],
                     is_finished=bool(match_data[4]),
                     result=match_data[5],
                     game_type="mastermind",
@@ -184,7 +180,6 @@ class Database:
                     max_attempts=mm_data[6]
                 )
         
-        # C'est un match de Morpion
         return Match(
             id=match_data[0],
             player1=player1,
