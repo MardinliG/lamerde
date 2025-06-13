@@ -1,6 +1,3 @@
-"""
-Module pour l'interface d'attente du client Mastermind.
-"""
 import tkinter as tk
 
 def setup_waiting_ui(client):

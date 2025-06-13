@@ -1,6 +1,3 @@
-"""
-Module pour l'interface de résultat du client Morpion.
-"""
 import tkinter as tk
 
 def setup_result_ui(client, message, color):

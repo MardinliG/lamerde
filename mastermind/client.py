@@ -1,8 +1,3 @@
-"""
-Module client pour le jeu Mastermind.
-Contient la classe principale MastermindClient qui gère la connexion au serveur
-et l'interface utilisateur.
-"""
 import socket
 import threading
 import json

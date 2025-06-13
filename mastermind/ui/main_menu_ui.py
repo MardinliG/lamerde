@@ -1,6 +1,3 @@
-"""
-Module pour l'interface du menu principal du client Mastermind.
-"""
 import tkinter as tk
 
 def setup_main_menu_ui(client):

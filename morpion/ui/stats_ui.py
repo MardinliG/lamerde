@@ -1,6 +1,3 @@
-"""
-Module pour l'interface des statistiques du client Morpion.
-"""
 import tkinter as tk
 
 def setup_stats_ui(client):

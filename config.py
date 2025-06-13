@@ -1,8 +1,3 @@
-"""
-Module de configuration pour l'application de jeux en réseau.
-Contient les constantes et paramètres de configuration.
-"""
-
 class Config:
     """Classe de configuration pour l'application."""
     # Couleurs et styles

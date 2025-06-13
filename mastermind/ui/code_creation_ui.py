@@ -1,7 +1,4 @@
 
-"""
-Module pour l'interface de création de code du client Mastermind.
-"""
 import tkinter as tk
 
 def setup_code_creation_ui(client):

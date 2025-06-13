@@ -1,6 +1,3 @@
-"""
-Module pour l'interface de connexion de l'application.
-"""
 import tkinter as tk
 
 def setup_login_ui(client):

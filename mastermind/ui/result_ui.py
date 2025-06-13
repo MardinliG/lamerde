@@ -1,6 +1,3 @@
-"""
-Module pour l'interface de résultat du client Mastermind.
-"""
 import tkinter as tk
 from config import Config
 

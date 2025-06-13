@@ -1,8 +1,3 @@
-"""
-Module client principal pour l'application de jeux en réseau.
-Contient la classe principale AppClient qui gère la connexion au serveur
-et l'interface utilisateur pour la sélection des jeux.
-"""
 import socket
 import threading
 import json

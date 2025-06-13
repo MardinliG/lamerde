@@ -1,6 +1,3 @@
-"""
-Module pour l'interface de jeu du client Morpion.
-"""
 import tkinter as tk
 
 def setup_game_ui(client):

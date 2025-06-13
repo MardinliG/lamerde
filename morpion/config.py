@@ -1,8 +1,3 @@
-"""
-Module de configuration pour le client Morpion.
-Contient les constantes et paramètres de configuration.
-"""
-
 class Config:
     """Classe de configuration pour le client Morpion."""
     # Couleurs et styles

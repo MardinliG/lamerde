@@ -1,6 +1,3 @@
-"""
-Module pour l'interface de sélection de jeu de l'application.
-"""
 import tkinter as tk
 
 def setup_game_selection_ui(client):

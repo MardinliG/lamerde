@@ -1,6 +1,3 @@
-"""
-Module pour l'interface des règles du jeu du client Mastermind.
-"""
 import tkinter as tk
 
 def setup_rules_ui(client):
